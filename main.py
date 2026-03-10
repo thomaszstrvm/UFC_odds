@@ -89,7 +89,7 @@ def analisar_proximo_evento_ufc():
         # AGRUPAMENTO CORRETO: Pegamos as 3 melhores casas para CADA aposta (Vitória A e Vitória B)
         df_top_3_casas = df_unico.groupby(['Luta', 'Aposta']).head(3)
 
-        print(f"\nTOP ODDS PARA O EVENTO ({proxima_data}):")
+        print(f"\nTOP ODDS PARA O EVENTO! ({proxima_data}):")
         print(df_top_3_casas[['Luta', 'Aposta', 'Odd', 'Probabilidade Real (%)', 'Casa']].to_string(index=False))
 
     else:
