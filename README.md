@@ -39,8 +39,8 @@ API_KEY=sua_chave_de_api_aqui
 Coletar e armazenar dados:
 Busca o evento de MMA mais próximo e grava as odds atuais no banco historico_odds_ufc.db.
 ```bash
-python main.py
+main.py
 ```
 Consultar dados:
 ```bash
-python consulta.py
+consultar_banco.py
