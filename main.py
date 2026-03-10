@@ -1,76 +1,99 @@
-import requests
-import pandas as pd
-from datetime import datetime
 import os
 import sqlite3
+from datetime import datetime
+
+import requests
+import pandas as pd
 from dotenv import load_dotenv
 
 load_dotenv()
 
 API_KEY = os.getenv('API_KEY')
-SPORT   = 'mma_mixed_martial_arts'
-REGIONS = 'us,eu'
+SPORT = 'mma_mixed_martial_arts'
+REGIONS = 'us,eu,uk,au'
 MARKETS = 'h2h'
-DB_PATH = 'historico_odds_ufc.db'
-
-
-def classificar_aposta(nome: str) -> str:
-    return 'Empate' if nome.lower() in ('draw', 'empate') else f'Vitória: {nome}'
 
 
 def analisar_proximo_evento_ufc():
-    response = requests.get(
-        f'https://api.the-odds-api.com/v4/sports/{SPORT}/odds',
-        params={'apiKey': API_KEY, 'regions': REGIONS, 'markets': MARKETS, 'oddsFormat': 'decimal'}
-    )
+    url = f'https://api.the-odds-api.com/v4/sports/{SPORT}/odds'
+
+    params = {
+        'apiKey': API_KEY,
+        'regions': REGIONS,
+        'markets': MARKETS,
+        'oddsFormat': 'decimal',
+    }
+
+    print("Buscando eventos futuros de UFC/MMA na API...")
+    response = requests.get(url, params=params)
 
     if response.status_code != 200:
-        print(f" Erro {response.status_code}: {response.text}")
+        print(f"Erro: {response.status_code}")
         return
 
     dados = response.json()
+
     if not dados:
-        print("Nenhum evento futuro encontrado.")
+        print("Nenhum evento futuro encontrado na API no momento.")
         return
 
-    proxima_data = min(e['commence_time'][:10] for e in dados)
-    print(f"📅 Próximo evento: {proxima_data}\n")
+    proxima_data = min([evento['commence_time'][:10] for evento in dados])
+    print(f"Proximo evento detectado para o dia: {proxima_data}\n")
 
-    lista_lutas = [
-        {
-            'Luta':   f"{evento['home_team']} vs {evento['away_team']}",
-            'Aposta': classificar_aposta(outcome['name']),
-            'Casa':   bookmaker['title'],
-            'Odd':    outcome['price'],
-        }
-        for evento in dados
-        if evento['commence_time'][:10] == proxima_data
-        for bookmaker in evento['bookmakers']
-        for market in bookmaker['markets']
-        if market['key'] == 'h2h'
-        for outcome in market['outcomes']
-    ]
+    lista_lutas = []
 
-    if not lista_lutas:
-        print(f"Nenhuma odd encontrada para {proxima_data}.")
-        return
+    for evento in dados:
+        if evento['commence_time'][:10] == proxima_data:
+            lutador_a = evento['home_team']
+            lutador_b = evento['away_team']
+
+            for bookmaker in evento['bookmakers']:
+                casa = bookmaker['title']
+
+                for market in bookmaker['markets']:
+                    if market['key'] == 'h2h':
+                        for outcome in market['outcomes']:
+                            nome_selecao = outcome['name']
+                            odd = outcome['price']
+
+                            tipo_aposta = 'Empate' if nome_selecao.lower() in ('draw',
+                                                                               'empate') else f'Vitória: {nome_selecao}'
+
+                            lista_lutas.append({
+                                'Data_Evento': proxima_data,
+                                'Luta': f"{lutador_a} vs {lutador_b}",
+                                'Aposta': tipo_aposta,
+                                'Casa': casa,
+                                'Odd': odd
+                            })
 
     df = pd.DataFrame(lista_lutas)
 
-    df_melhores = (
-        df.loc[df.groupby(['Luta', 'Aposta'])['Odd'].idxmax()]
-        .sort_values('Luta')
-        .assign(Data_Coleta=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-        .reset_index(drop=True)
-    )
+    if not df.empty:
+        df['Probabilidade Real (%)'] = (1 / df['Odd'] * 100).round(2)
 
-    with sqlite3.connect(DB_PATH) as con:
-        df_melhores.to_sql('tabela_odds', con, if_exists='append', index=False)
+        df_para_banco = df.copy()
+        df_para_banco['Data_Coleta'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    print("✅ Dados salvos no banco de dados!")
-    print(f"\n MELHORES ODDS — {proxima_data}:")
-    print(df_melhores[['Luta', 'Aposta', 'Odd', 'Casa']].to_string(index=False))
+        with sqlite3.connect('historico_odds_ufc.db') as conexao:
+            df_para_banco.to_sql('tabela_odds', conexao, if_exists='append', index=False)
 
+        print("Dados salvos com sucesso no banco de dados.")
+
+        # Ordena por Luta, depois por Aposta (Nome do lutador) e pega as Maiores Odds
+        df_ordenado = df.sort_values(by=['Luta', 'Aposta', 'Odd'], ascending=[True, True, False])
+
+        # Removemos duplicatas caso a API retorne a mesma casa duas vezes
+        df_unico = df_ordenado.drop_duplicates(subset=['Luta', 'Aposta', 'Casa'])
+
+        # AGRUPAMENTO CORRETO: Pegamos as 3 melhores casas para CADA aposta (Vitória A e Vitória B)
+        df_top_3_casas = df_unico.groupby(['Luta', 'Aposta']).head(3)
+
+        print(f"\nTOP ODDS PARA O EVENTO ({proxima_data}):")
+        print(df_top_3_casas[['Luta', 'Aposta', 'Odd', 'Probabilidade Real (%)', 'Casa']].to_string(index=False))
+
+    else:
+        print(f"Nenhuma odd encontrada especificamente para o evento do dia {proxima_data}.")
 
 if __name__ == "__main__":
     analisar_proximo_evento_ufc()
