@@ -19,7 +19,7 @@ O sistema é dividido em dois módulos principais:
 ## Como executar o projeto localmente
 
 ### 1. Clonar o repositório
-```bash
+
 git clone [https://github.com/SEU_USUARIO/NOME_DO_REPOSITORIO.git](https://github.com/SEU_USUARIO/NOME_DO_REPOSITORIO.git)
 cd NOME_DO_REPOSITORIO
 2. Instalar dependências
