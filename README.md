@@ -18,17 +18,11 @@ O sistema é dividido em dois módulos principais:
 
 ## Instalação e Configuração
 
-**1. Clonar o repositório**
-
-```bash
-git clone [https://github.com/SEU_USUARIO/NOME_DO_REPOSITORIO.git](https://github.com/SEU_USUARIO/NOME_DO_REPOSITORIO.git)
-cd NOME_DO_REPOSITORIO
-```
-2. Instalar dependências
+1. Instalar dependências
 ```bash
 pip install requests pandas python-dotenv
 ```
-3. Configurar credenciais
+2. Configurar credenciais
 
 Crie um arquivo .env na pasta raiz do projeto e insira a sua chave da The Odds API:
 ````bash
