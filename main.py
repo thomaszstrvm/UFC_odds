@@ -79,14 +79,8 @@ def analisar_proximo_evento_ufc():
             df_para_banco.to_sql('tabela_odds', conexao, if_exists='append', index=False)
 
         print("Dados salvos com sucesso no banco de dados.")
-
-        # Ordena por Luta, depois por Aposta (Nome do lutador) e pega as Maiores Odds
         df_ordenado = df.sort_values(by=['Luta', 'Aposta', 'Odd'], ascending=[True, True, False])
-
-        # Removemos duplicatas caso a API retorne a mesma casa duas vezes
         df_unico = df_ordenado.drop_duplicates(subset=['Luta', 'Aposta', 'Casa'])
-
-        # AGRUPAMENTO CORRETO: Pegamos as 3 melhores casas para CADA aposta (Vitória A e Vitória B)
         df_top_3_casas = df_unico.groupby(['Luta', 'Aposta']).head(3)
 
         print(f"\nTOP ODDS PARA O EVENTO! ({proxima_data}):")
