@@ -1,3 +1,4 @@
+import math
 import os
 import sqlite3
 from datetime import datetime
@@ -14,6 +15,31 @@ REGIONS = 'us,eu,uk,au'
 MARKETS = 'h2h'
 
 
+def _odd_valida(valor):
+    """Odds decimais são números finitos maiores que 1."""
+    return isinstance(valor, (int, float)) and not isinstance(valor, bool) and math.isfinite(valor) and valor > 1
+
+
+def _evento_valido(evento):
+    """Confere apenas a estrutura usada abaixo; não valida o conteúdo esportivo."""
+    try:
+        if not (isinstance(evento['commence_time'], str) and isinstance(evento['home_team'], str)
+                and isinstance(evento['away_team'], str) and isinstance(evento['bookmakers'], list)):
+            return False
+        for bookmaker in evento['bookmakers']:
+            if not isinstance(bookmaker['title'], str):
+                return False
+            for market in bookmaker['markets']:
+                if not isinstance(market['key'], str):
+                    return False
+                for outcome in market['outcomes']:
+                    if not isinstance(outcome['name'], str) or 'price' not in outcome:
+                        return False
+        return True
+    except (KeyError, TypeError):
+        return False
+
+
 def analisar_proximo_evento_ufc():
     url = f'https://api.the-odds-api.com/v4/sports/{SPORT}/odds'
 
@@ -24,17 +50,34 @@ def analisar_proximo_evento_ufc():
         'oddsFormat': 'decimal',
     }
 
+    if not API_KEY:
+        print("Erro: API_KEY ausente. Configure o arquivo .env.")
+        return
+
     print("Buscando eventos futuros de UFC/MMA na API...")
-    response = requests.get(url, params=params)
+    try:
+        response = requests.get(url, params=params, timeout=(5, 20))
+    except requests.RequestException as erro:
+        # A mensagem da exceção contém a URL com a chave; exibir apenas o tipo.
+        print(f"Erro de rede ao consultar a API: {type(erro).__name__}")
+        return
 
     if response.status_code != 200:
         print(f"Erro: {response.status_code}")
         return
 
-    dados = response.json()
+    try:
+        dados = response.json()
+    except ValueError:
+        print("Erro: a API não retornou JSON válido.")
+        return
 
     if not dados:
         print("Nenhum evento futuro encontrado na API no momento.")
+        return
+
+    if not isinstance(dados, list) or not all(_evento_valido(evento) for evento in dados):
+        print("Erro: resposta da API em formato inesperado; nada foi gravado.")
         return
 
     proxima_data = min([evento['commence_time'][:10] for evento in dados])
@@ -55,6 +98,8 @@ def analisar_proximo_evento_ufc():
                         for outcome in market['outcomes']:
                             nome_selecao = outcome['name']
                             odd = outcome['price']
+                            if not _odd_valida(odd):
+                                continue
 
                             tipo_aposta = 'Empate' if nome_selecao.lower() in ('draw',
                                                                                'empate') else f'Vitória: {nome_selecao}'
